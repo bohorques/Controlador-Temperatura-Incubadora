@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controlador de Temperatura — ITM</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #060b06;
+            --bg-board: #0a1a0a;
+            --bg-card: #0e1f0e;
+            --copper: #c87941;
+            --copper-light: #e8a060;
+            --led-green: #00ff41;
+            --led-dim: #004d14;
+            --trace: #1a4d1a;
+            --text-primary: #e8f5e8;
+            --text-secondary: #7aaa7a;
+            --danger: #ff3d00;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Exo 2', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image:
+                linear-gradient(rgba(0,255,65,0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,255,65,0.025) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* NAV */
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 2rem;
+            background: rgba(6,11,6,0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--trace);
+        }
+        .nav-logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            color: var(--led-green);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+        .nav-links {
+            display: flex;
+            gap: 1.6rem;
+            list-style: none;
+        }
+        .nav-links a {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            letter-spacing: 1px;
+            transition: color 0.3s, text-shadow 0.3s;
+        }
+        .nav-links a:hover {
+            color: var(--led-green);
+            text-shadow: 0 0 10px var(--led-green);
+        }
+
+        /* HERO */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 100px 2rem 4rem;
+        }
+        .circuit-bg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+        }
+        .trace-line {
+            position: absolute;
+            background: linear-gradient(90deg, transparent, var(--led-green), transparent);
+            height: 1px;
+            animation: trace-flow linear infinite;
+            pointer-events: none;
+        }
+        @keyframes trace-flow {
+            0%   { transform: translateX(-400px); opacity: 0; }
+            15%  { opacity: 0.25; }
+            85%  { opacity: 0.25; }
+            100% { transform: translateX(110vw); opacity: 0; }
+        }
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            max-width: 920px;
+        }
+        .hero-tag {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--copper);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 1.2rem;
+            display: inline-block;
+        }
+        .hero-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2rem, 5.5vw, 4.2rem);
+            font-weight: 900;
+            line-height: 1.1;
+            color: var(--text-primary);
+            text-shadow: 0 0 50px rgba(0,255,65,0.25);
+            margin-bottom: 1.5rem;
+        }
+        .hero-title span { color: var(--led-green); text-shadow: 0 0 20px var(--led-green); }
+        .hero-subtitle {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            max-width: 620px;
+            margin: 0 auto 3rem;
+            line-height: 1.8;
+        }
+
+        /* TEMP DISPLAY */
+        .temp-display {
+            display: inline-flex;
+            align-items: center;
+            gap: 2rem;
+            background: var(--bg-board);
+            border: 1px solid var(--trace);
+            border-radius: 6px;
+            padding: 1.5rem 2.5rem;
+            margin-bottom: 2.5rem;
+            position: relative;
+        }
+        .temp-display::before {
+            content: 'SETPOINT ACTIVO';
+            position: absolute;
+            top: 8px; left: 14px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.58rem;
+            color: var(--text-secondary);
+            letter-spacing: 2px;
+        }
+        .temp-value {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 3.8rem;
+            color: var(--led-green);
+            text-shadow: 0 0 20px var(--led-green), 0 0 50px rgba(0,255,65,0.4);
+            animation: glow-pulse 2s ease-in-out infinite;
+        }
+        @keyframes glow-pulse {
+            0%, 100% { text-shadow: 0 0 20px var(--led-green), 0 0 50px rgba(0,255,65,0.4); }
+            50%       { text-shadow: 0 0 30px var(--led-green), 0 0 70px rgba(0,255,65,0.7); }
+        }
+        .temp-unit {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.6rem;
+            color: var(--copper);
+        }
+        .status-indicators { display: flex; flex-direction: column; gap: 0.55rem; }
+        .indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.68rem;
+            color: var(--text-secondary);
+        }
+        .led {
+            width: 8px; height: 8px; min-width: 8px;
+            border-radius: 50%;
+            background: var(--led-green);
+            box-shadow: 0 0 6px var(--led-green);
+            animation: led-pulse 1.4s ease-in-out infinite;
+        }
+        .led.off { background: #1a1a1a; box-shadow: none; animation: none; }
+        .led.red { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+        @keyframes led-pulse {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.35; }
+        }
+
+        /* BUTTONS */
+        .hero-cta { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            padding: 0.9rem 2.2rem;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            text-transform: uppercase;
+            transition: all 0.3s;
+            display: inline-block;
+            clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+        }
+        .btn-primary { background: var(--led-green); color: var(--bg-dark); font-weight: 700; }
+        .btn-primary:hover { background: #00d435; box-shadow: 0 0 25px rgba(0,255,65,0.45); transform: translateY(-2px); }
+        .btn-outline { background: transparent; color: var(--copper); border: 1px solid var(--copper); }
+        .btn-outline:hover { background: rgba(200,121,65,0.1); box-shadow: 0 0 18px rgba(200,121,65,0.3); transform: translateY(-2px); }
+
+        /* SECTIONS */
+        .section-wrap {
+            position: relative;
+            z-index: 1;
+            padding: 5rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.68rem;
+            letter-spacing: 4px;
+            color: var(--copper);
+            text-transform: uppercase;
+            margin-bottom: 0.4rem;
+        }
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(1.4rem, 3vw, 2.4rem);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.8rem;
+        }
+        .section-title span { color: var(--led-green); }
+        .section-divider {
+            width: 60px; height: 2px;
+            background: linear-gradient(90deg, var(--led-green), transparent);
+            margin-bottom: 2.5rem;
+        }
+
+        /* STAGES */
+        .stages-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.25rem; }
+        .stage-card {
+            background: var(--bg-board);
+            border: 1px solid var(--trace);
+            border-radius: 4px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        .stage-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 3px; height: 100%;
+            background: var(--led-green);
+        }
+        .stage-card:hover { border-color: rgba(0,255,65,0.4); transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,255,65,0.08); }
+        .stage-number { font-family: 'Orbitron', sans-serif; font-size: 0.62rem; color: var(--led-green); letter-spacing: 2px; margin-bottom: 0.6rem; }
+        .stage-title { font-family: 'Orbitron', sans-serif; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 0.7rem; }
+        .stage-desc { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.65; }
+        .chips { margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+        .chip {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.62rem;
+            padding: 0.2rem 0.55rem;
+            background: rgba(0,255,65,0.07);
+            border: 1px solid var(--trace);
+            color: var(--led-green);
+            border-radius: 2px;
+        }
+
+        /* SPECS TABLE */
+        .specs-table { width: 100%; border-collapse: collapse; border: 1px solid var(--trace); }
+        .specs-table th, .specs-table td { padding: 0.85rem 1.2rem; text-align: left; border-bottom: 1px solid var(--trace); font-size: 0.88rem; }
+        .specs-table th { font-family: 'Orbitron', sans-serif; font-size: 0.65rem; letter-spacing: 2px; color: var(--copper); text-transform: uppercase; background: var(--bg-board); }
+        .specs-table td:first-child { font-family: 'Share Tech Mono', monospace; color: var(--led-green); font-size: 0.78rem; width: 45%; }
+        .specs-table td:last-child { color: var(--text-secondary); }
+        .specs-table tr:hover td { background: rgba(0,255,65,0.025); }
+
+        /* PCB GALLERY */
+        .pcb-box { background: var(--bg-board); border: 1px solid var(--trace); border-radius: 6px; padding: 2rem; margin-top: 3rem; }
+        .pcb-box-label { font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: var(--copper); letter-spacing: 2px; margin-bottom: 1.2rem; }
+        .pcb-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 1rem; }
+        .pcb-slot {
+            aspect-ratio: 16/10;
+            background: #080f08;
+            border: 2px dashed #1e3e1e;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.72rem;
+            overflow: hidden;
+            position: relative;
+            transition: border-color 0.3s;
+        }
+        .pcb-slot:hover { border-color: var(--trace); }
+        /* ── FIX IMÁGENES: position absolute, z-index sobre placeholder ── */
+        .pcb-slot img {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: none;
+            z-index: 1;
+        }
+        .pcb-slot img.loaded { display: block; }
+        .pcb-slot .slot-ph { pointer-events: none; }
+        .pcb-slot .slot-tag {
+            position: absolute;
+            bottom: 8px; left: 10px;
+            font-size: 0.6rem;
+            color: var(--led-green);
+            background: rgba(0,0,0,0.8);
+            padding: 2px 7px;
+            letter-spacing: 1px;
+            z-index: 2;
+        }
+        .pcb-hint { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: #3a5a3a; margin-top: 1rem; line-height: 1.7; }
+
+        /* ── SECCIÓN 5: MONTAJE ─────────────────────────────────────── */
+        .warning-box {
+            background: rgba(255,61,0,0.07);
+            border: 1px solid rgba(255,61,0,0.35);
+            border-left: 3px solid var(--danger);
+            border-radius: 4px;
+            padding: 1.2rem 1.6rem;
+            margin-bottom: 2.5rem;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.78rem;
+            color: #ff9070;
+            line-height: 1.9;
+        }
+        .warning-box strong {
+            display: block;
+            color: var(--danger);
+            font-size: 0.68rem;
+            letter-spacing: 3px;
+            margin-bottom: 0.5rem;
+        }
+        .steps-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        .step-card {
+            background: var(--bg-board);
+            border: 1px solid var(--trace);
+            border-radius: 4px;
+            padding: 1.35rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        .step-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+        }
+        .step-card.safe::before    { background: var(--led-green); }
+        .step-card.caution::before { background: var(--copper); }
+        .step-card.danger::before  { background: var(--danger); }
+        .step-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,255,65,0.07); }
+
+        .step-num { font-family: 'Orbitron', sans-serif; font-size: 0.57rem; letter-spacing: 2px; margin-bottom: 0.45rem; }
+        .step-card.safe    .step-num { color: var(--led-green); }
+        .step-card.caution .step-num { color: var(--copper); }
+        .step-card.danger  .step-num { color: var(--danger); }
+
+        .step-title { font-family: 'Orbitron', sans-serif; font-size: 0.82rem; color: var(--text-primary); margin-bottom: 0.6rem; line-height: 1.3; }
+        .step-components { list-style: none; margin-bottom: 0.75rem; }
+        .step-components li {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            padding: 0.18rem 0;
+            border-bottom: 1px solid rgba(26,77,26,0.35);
+            display: flex;
+            gap: 0.45rem;
+        }
+        .step-components li::before { content: '›'; color: var(--led-green); }
+        .step-note {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.65rem;
+            line-height: 1.6;
+            padding: 0.4rem 0.6rem;
+            border-radius: 3px;
+            margin-top: 0.5rem;
+        }
+        .step-card.safe    .step-note { color: rgba(0,255,65,0.75); background: rgba(0,255,65,0.04); }
+        .step-card.caution .step-note { color: rgba(200,121,65,0.9); background: rgba(200,121,65,0.05); }
+        .step-card.danger  .step-note { color: rgba(255,100,60,0.9); background: rgba(255,61,0,0.05); }
+
+        .svg-diagram {
+            width: 100%;
+            max-width: 960px;
+            margin: 1.5rem auto 0;
+            display: block;
+            border: 1px solid var(--trace);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .diagram-label {
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.68rem;
+            letter-spacing: 4px;
+            color: var(--copper);
+            text-transform: uppercase;
+            margin: 2.5rem 0 0.3rem;
+        }
+        .verify-list {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+            gap: 0.65rem;
+            margin-top: 1.5rem;
+        }
+        .verify-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.7rem;
+            background: var(--bg-board);
+            border: 1px solid var(--trace);
+            border-radius: 3px;
+            padding: 0.7rem 1rem;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.73rem;
+            color: var(--text-secondary);
+            line-height: 1.55;
+        }
+        .verify-list li .vi { min-width: 1rem; font-size: 0.85rem; margin-top: 0.05rem; }
+        .verify-list li .vi.ok  { color: var(--led-green); }
+        .verify-list li .vi.err { color: var(--danger); }
+
+        /* TEAM */
+        .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; }
+        .team-card {
+            background: var(--bg-board);
+            border: 1px solid var(--trace);
+            border-radius: 4px;
+            padding: 1.75rem;
+            display: flex;
+            gap: 1.25rem;
+            align-items: flex-start;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .team-card::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--led-green), var(--copper), transparent);
+            transform: scaleX(0);
+            transform-origin: left;
+            transition: transform 0.4s;
+        }
+        .team-card:hover::after { transform: scaleX(1); }
+        .team-card:hover { border-color: rgba(0,255,65,0.25); }
+        .avatar {
+            width: 54px; height: 54px; min-width: 54px;
+            background: linear-gradient(135deg, #0e1f0e, #060b06);
+            border: 1px solid var(--led-green);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            color: var(--led-green);
+            text-shadow: 0 0 10px var(--led-green);
+        }
+        .team-name { font-family: 'Orbitron', sans-serif; font-size: 0.88rem; color: var(--text-primary); margin-bottom: 0.35rem; line-height: 1.3; }
+        .team-role { font-size: 0.72rem; color: var(--copper); font-family: 'Share Tech Mono', monospace; margin-bottom: 0.35rem; }
+        .team-email { font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: var(--text-secondary); word-break: break-all; }
+        .teacher-box { margin-top: 1.5rem; padding: 1.5rem; background: var(--bg-board); border: 1px solid var(--trace); border-radius: 4px; display: flex; align-items: center; gap: 1.5rem; }
+        .teacher-label { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: var(--copper); letter-spacing: 2px; margin-bottom: 0.3rem; }
+        .teacher-name { font-family: 'Orbitron', sans-serif; font-size: 0.95rem; color: var(--text-primary); }
+        .teacher-sub { font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; color: var(--text-secondary); margin-top: 0.25rem; }
+
+        /* FOOTER */
+        footer { position: relative; z-index: 1; border-top: 1px solid var(--trace); padding: 2.5rem 2rem; text-align: center; }
+        .footer-text { font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; color: var(--text-secondary); line-height: 2.2; }
+        .footer-text span { color: var(--led-green); }
+
+        /* REVEAL */
+        .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+
+        @media (max-width: 640px) {
+            .nav-links { display: none; }
+            .temp-display { flex-direction: column; gap: 1rem; padding: 1.5rem 1.2rem; }
+            .temp-value { font-size: 2.8rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+    <div class="nav-logo">ITM · Controlador de Temperatura</div>
+    <ul class="nav-links">
+        <li><a href="#about">Descripción</a></li>
+        <li><a href="#stages">Etapas</a></li>
+        <li><a href="#specs">Especificaciones</a></li>
+        <li><a href="#pcb">PCB</a></li>
+        <li><a href="#montaje">Montaje</a></li>
+        <li><a href="#team">Equipo</a></li>
+    </ul>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+    <div class="circuit-bg" id="circuitBg"></div>
+    <div class="hero-content">
+        <div class="hero-tag">// Diseño y Montaje de Circuitos Electrónicos — ITM 2026-1</div>
+        <h1 class="hero-title">
+            Sistema de Control de<br>
+            <span>Temperatura</span><br>
+            para Incubadora
+        </h1>
+        <p class="hero-subtitle">
+            Controlador ON/OFF basado en Arduino UNO con sensor LM35, aislamiento galvánico mediante optoacoplador MOC3021 y TRIAC para control de carga AC.
+        </p>
+        <div class="temp-display">
+            <div><div class="temp-value" id="tempVal">37.5</div></div>
+            <div class="temp-unit">°C</div>
+            <div class="status-indicators">
+                <div class="indicator"><div class="led"></div><span>SENSOR ACTIVO</span></div>
+                <div class="indicator"><div class="led" style="animation-delay:0.5s"></div><span>CONTROL ON</span></div>
+                <div class="indicator"><div class="led off"></div><span>ALARMA OFF</span></div>
+            </div>
+        </div>
+        <div class="hero-cta">
+            <a href="#stages" class="btn btn-primary">Ver Sistema</a>
+            <a href="https://github.com/TU_USUARIO/TU_REPOSITORIO" class="btn btn-outline" target="_blank">Repositorio GitHub</a>
+        </div>
+    </div>
+</div>
+
+<!-- ABOUT -->
+<div class="section-wrap" id="about">
+    <div class="reveal">
+        <div class="section-label">// 01 — Descripción General</div>
+        <h2 class="section-title">El Hardware en su <span>Contexto</span></h2>
+        <div class="section-divider"></div>
+        <p style="color:var(--text-secondary); max-width:780px; line-height:1.9; font-size:0.95rem;">
+            Sistema de control de temperatura de tipo <strong style="color:var(--text-primary)">ON/OFF</strong> diseñado con fines educativos,
+            orientado a simular el funcionamiento de una incubadora. El dispositivo regula la temperatura interior mediante
+            una <strong style="color:var(--text-primary)">bombilla incandescente</strong> como elemento calefactor y un
+            <strong style="color:var(--text-primary)">ventilador DC</strong> como elemento de enfriamiento, gobernados por un
+            <strong style="color:var(--copper)">Arduino UNO</strong>. La PCB fue diseñada profesionalmente en
+            <strong style="color:var(--copper)">Fusion 360</strong> con dimensiones de 189.7 × 112.7 mm,
+            20 componentes, 25 señales y vertido de cobre en plano de tierra. Frente a controladores comerciales como el
+            Inkbird ITC-308, este proyecto ofrece una alternativa económica, replicable y de código abierto.
+        </p>
+    </div>
+</div>
+
+<!-- STAGES -->
+<div class="section-wrap" id="stages">
+    <div class="reveal">
+        <div class="section-label">// 02 — Arquitectura del Sistema</div>
+        <h2 class="section-title">Etapas <span>Funcionales</span></h2>
+        <div class="section-divider"></div>
+    </div>
+    <div class="stages-grid">
+        <div class="stage-card reveal">
+            <div class="stage-number">ETAPA 01</div>
+            <div class="stage-title">Alimentación</div>
+            <div class="stage-desc">La tensión de red AC es reducida por el transformador TR1, rectificada por el puente BR1, filtrada (C1: 2200µF) y regulada a 5V estables mediante el 7805 para alimentar todos los componentes de baja tensión.</div>
+            <div class="chips">
+                <span class="chip">TR1 — Transformador</span>
+                <span class="chip">BR1 — Puente</span>
+                <span class="chip">C1 — 2200µF</span>
+                <span class="chip">U2 — 7805</span>
+            </div>
+        </div>
+        <div class="stage-card reveal" style="transition-delay:0.1s">
+            <div class="stage-number">ETAPA 02</div>
+            <div class="stage-title">Sensado</div>
+            <div class="stage-desc">El sensor LM35 entrega 10mV por cada °C medido. La señal analógica es leída directamente por el pin ADC del Arduino UNO para su conversión digital de 10 bits.</div>
+            <div class="chips">
+                <span class="chip">U1 — LM35</span>
+                <span class="chip">10mV/°C</span>
+                <span class="chip">ADC 10-bit</span>
+            </div>
+        </div>
+        <div class="stage-card reveal" style="transition-delay:0.2s">
+            <div class="stage-number">ETAPA 03</div>
+            <div class="stage-title">Procesamiento</div>
+            <div class="stage-desc">Arduino UNO compara la temperatura medida con el setpoint de 37.5°C (ajustable por potenciómetro RPU), activa los actuadores correspondientes y muestra el estado en pantalla LCD 16×2 en tiempo real.</div>
+            <div class="chips">
+                <span class="chip">ARD1 — Arduino UNO</span>
+                <span class="chip">LCD1 — 16×2</span>
+                <span class="chip">RPU — Potenciómetro</span>
+            </div>
+        </div>
+        <div class="stage-card reveal" style="transition-delay:0.3s">
+            <div class="stage-number">ETAPA 04</div>
+            <div class="stage-title">Control de Carga AC</div>
+            <div class="stage-desc">La señal del Arduino pasa por R4 (200Ω) → Q1 (2N2222) → D1 (TIP107) → optoacoplador MOC3021 para aislamiento galvánico → TRIAC que conmuta la carga AC garantizando seguridad del circuito y del usuario.</div>
+            <div class="chips">
+                <span class="chip">R4 — 200Ω</span>
+                <span class="chip">Q1 — 2N2222</span>
+                <span class="chip">D1 — TIP107</span>
+                <span class="chip">U3 — MOC3021</span>
+                <span class="chip">U4 — TRIAC</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SPECS -->
+<div class="section-wrap" id="specs">
+    <div class="reveal">
+        <div class="section-label">// 03 — Especificaciones Técnicas</div>
+        <h2 class="section-title">Ficha <span>Técnica</span></h2>
+        <div class="section-divider"></div>
+        <table class="specs-table">
+            <thead><tr><th>Parámetro</th><th>Valor / Descripción</th></tr></thead>
+            <tbody>
+                <tr><td>Setpoint de temperatura</td><td>37.5 °C (ajustable)</td></tr>
+                <tr><td>Sensor de temperatura</td><td>LM35 — 10mV/°C</td></tr>
+                <tr><td>Microcontrolador</td><td>Arduino UNO (ATmega328P)</td></tr>
+                <tr><td>Tipo de control</td><td>ON/OFF (Bang-Bang)</td></tr>
+                <tr><td>Actuador calefactor</td><td>Bombilla incandescente AC</td></tr>
+                <tr><td>Actuador enfriamiento</td><td>Ventilador DC</td></tr>
+                <tr><td>Tensión de alimentación</td><td>5V DC regulado (7805)</td></tr>
+                <tr><td>Aislamiento galvánico</td><td>Optoacoplador MOC3021</td></tr>
+                <tr><td>Visualización</td><td>Pantalla LCD 16×2 (LM016L)</td></tr>
+                <tr><td>Dimensiones PCB</td><td>189.7 × 112.7 mm</td></tr>
+                <tr><td>Componentes en placa</td><td>20 componentes · 25 señales · 98 agujeros</td></tr>
+                <tr><td>Herramientas de diseño</td><td>Proteus ISIS · Fusion 360 · KiCad</td></tr>
+                <tr><td>Resultado DRC</td><td>0 errores eléctricos</td></tr>
+                <tr><td>Costo total de fabricación</td><td>$61.000 COP (≈ 15 USD)</td></tr>
+                <tr><td>Institución</td><td>ITM Medellín — Tecnología Automatización Electrónica</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- PCB -->
+<div class="section-wrap" id="pcb">
+    <div class="reveal">
+        <div class="section-label">// 04 — Diseño de PCB</div>
+        <h2 class="section-title">Placa de Circuito <span>Impreso</span></h2>
+        <div class="section-divider"></div>
+        <p style="color:var(--text-secondary); max-width:700px; line-height:1.85; font-size:0.9rem; margin-bottom:2rem;">
+            PCB diseñada en Fusion 360, simulada en Proteus ISIS y verificada en KiCad. Ruteo completo con 0 errores DRC,
+            plano de tierra en capa inferior y archivos Gerber listos para manufactura profesional CNC.
+        </p>
+    </div>
+    <div class="pcb-box reveal">
+        <div class="pcb-box-label">[ GALERÍA PCB ]</div>
+        <div class="pcb-grid">
+
+            <!-- IMAGEN 1: perspectivafrontal.jpg / .png -->
+            <div class="pcb-slot">
+                <img src="perspectivafrontal.jpg" alt="Vista 3D Frontal"
+                     onerror="if(!this._png){this._png=true;this.src='perspectivafrontal.png'}">
+                <span class="slot-ph" style="font-size:2rem;opacity:0.3">◻</span>
+                <span class="slot-ph">perspectivafrontal.jpg</span>
+                <div class="slot-tag">VISTA 3D FRONTAL</div>
+            </div>
+
+            <!-- IMAGEN 2: CapaTop.jpg / .png -->
+            <div class="pcb-slot">
+                <img src="CapaTop.jpg" alt="Vista 2D Capa Top"
+                     onerror="if(!this._png){this._png=true;this.src='CapaTop.png'}">
+                <span class="slot-ph" style="font-size:2rem;opacity:0.3">◻</span>
+                <span class="slot-ph">CapaTop.jpg</span>
+                <div class="slot-tag">CAPA TOP</div>
+            </div>
+
+            <!-- IMAGEN 3: Esquematico.jpg / .png -->
+            <div class="pcb-slot">
+                <img src="Esquematico.jpg" alt="Esquemático Completo"
+                     onerror="if(!this._png){this._png=true;this.src='Esquematico.png'}">
+                <span class="slot-ph" style="font-size:2rem;opacity:0.3">◻</span>
+                <span class="slot-ph">Esquematico.jpg</span>
+                <div class="slot-tag">ESQUEMÁTICO COMPLETO</div>
+            </div>
+
+        </div>
+        <p class="pcb-hint">
+            → Las imágenes deben estar en la misma carpeta que index.html con los nombres exactos:
+            <strong style="color:#3a7a3a">perspectivafrontal.jpg</strong> ·
+            <strong style="color:#3a7a3a">CapaTop.jpg</strong> ·
+            <strong style="color:#3a7a3a">Esquematico.jpg</strong>
+            (también funciona con .png automáticamente si .jpg no carga).
+        </p>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ -->
+<!-- SECCIÓN 5 — INSTRUCCIONES DE MONTAJE                  -->
+<!-- ══════════════════════════════════════════════════════ -->
+<div class="section-wrap" id="montaje">
+    <div class="reveal">
+        <div class="section-label">// 05 — Instrucciones de Montaje</div>
+        <h2 class="section-title">Guía de <span>Montaje</span></h2>
+        <div class="section-divider"></div>
+    </div>
+
+    <!-- Advertencia -->
+    <div class="warning-box reveal">
+        <strong>⚠ ADVERTENCIAS DE SEGURIDAD — LEER ANTES DE COMENZAR</strong>
+        Este circuito opera con tensión de red AC (120V). Desconecte siempre la alimentación antes de manipular
+        la placa. El TRIAC (U4), el transformador (TR1) y el puente rectificador (BR1) pueden retener carga
+        eléctrica peligrosa incluso tras apagar el interruptor SW1. Use pulsera antiestática al manipular el
+        Arduino UNO (ARD1), el sensor LM35 (U1) y el optoacoplador MOC3021 (U3).
+    </div>
+
+    <!-- ── DIAGRAMA 1: Orden de soldadura ── -->
+    <div class="reveal">
+        <div class="diagram-label">// Diagrama 1 — Orden de Soldadura Recomendado</div>
+        <svg class="svg-diagram" viewBox="0 0 960 230" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <pattern id="g1" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M20 0L0 0 0 20" fill="none" stroke="rgba(0,255,65,0.04)" stroke-width="0.5"/>
+                </pattern>
+                <marker id="arrowG" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#00ff41"/>
+                </marker>
+                <marker id="arrowR" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#ff6040"/>
+                </marker>
+            </defs>
+            <rect width="960" height="230" fill="#0a1a0a"/>
+            <rect width="960" height="230" fill="url(#g1)"/>
+            <text x="480" y="24" text-anchor="middle" fill="#3a6a3a" font-family="monospace" font-size="9" letter-spacing="3">// SOLDADURA DE MENOR A MAYOR PERFIL — VERIFICAR ORIENTACIÓN EN CADA PASO</text>
+
+            <!-- PASO 01 -->
+            <g transform="translate(18,42)">
+                <rect width="160" height="145" rx="3" fill="#0d180d" stroke="#1a4d1a" stroke-width="1"/>
+                <rect width="160" height="2" rx="1" fill="#00ff41"/>
+                <text x="80" y="22" text-anchor="middle" fill="#00ff41" font-family="monospace" font-size="8" letter-spacing="1">PASO 01</text>
+                <text x="80" y="38" text-anchor="middle" fill="#e8f5e8" font-family="monospace" font-size="9" font-weight="bold">RESISTENCIAS</text>
+                <line x1="10" y1="48" x2="150" y2="48" stroke="#1a4d1a" stroke-width="0.5"/>
+                <text x="80" y="64" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">R1 — 500 Ω</text>
+                <text x="80" y="80" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">R2 — 2 kΩ</text>
+                <text x="80" y="96" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">R4 — 200 Ω</text>
+                <rect x="8" y="112" width="144" height="24" rx="2" fill="rgba(0,255,65,0.05)"/>
+                <text x="80" y="128" text-anchor="middle" fill="rgba(0,255,65,0.7)" font-family="monospace" font-size="7.5">Perfil más bajo · sin polaridad</text>
+            </g>
+
+            <!-- flecha 1→2 -->
+            <line x1="183" y1="114" x2="197" y2="114" stroke="#1a4d1a" stroke-width="1.5" marker-end="url(#arrowG)"/>
+
+            <!-- PASO 02 -->
+            <g transform="translate(202,42)">
+                <rect width="160" height="145" rx="3" fill="#0d180d" stroke="#1a4d1a" stroke-width="1"/>
+                <rect width="160" height="2" rx="1" fill="#00ff41"/>
+                <text x="80" y="22" text-anchor="middle" fill="#00ff41" font-family="monospace" font-size="8" letter-spacing="1">PASO 02</text>
+                <text x="80" y="38" text-anchor="middle" fill="#e8f5e8" font-family="monospace" font-size="9" font-weight="bold">PASIVOS POLARES</text>
+                <line x1="10" y1="48" x2="150" y2="48" stroke="#1a4d1a" stroke-width="0.5"/>
+                <text x="80" y="64" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">D1 — 1N4007</text>
+                <text x="80" y="80" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">C3 — 4 µF</text>
+                <rect x="8" y="112" width="144" height="24" rx="2" fill="rgba(200,121,65,0.06)"/>
+                <text x="80" y="128" text-anchor="middle" fill="rgba(200,121,65,0.8)" font-family="monospace" font-size="7.5">⚠ Verificar polaridad</text>
+            </g>
+
+            <!-- flecha 2→3 -->
+            <line x1="367" y1="114" x2="381" y2="114" stroke="#1a4d1a" stroke-width="1.5" marker-end="url(#arrowG)"/>
+
+            <!-- PASO 03 -->
+            <g transform="translate(386,42)">
+                <rect width="160" height="145" rx="3" fill="#0d180d" stroke="#2a3d1a" stroke-width="1"/>
+                <rect width="160" height="2" rx="1" fill="#c87941"/>
+                <text x="80" y="22" text-anchor="middle" fill="#c87941" font-family="monospace" font-size="8" letter-spacing="1">PASO 03</text>
+                <text x="80" y="38" text-anchor="middle" fill="#e8f5e8" font-family="monospace" font-size="9" font-weight="bold">SEMICONDUCTORES</text>
+                <line x1="10" y1="48" x2="150" y2="48" stroke="#1a4d1a" stroke-width="0.5"/>
+                <text x="80" y="64" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">Q1 — 2N2222 (TO-92)</text>
+                <text x="80" y="80" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">U3 — MOC3021 (DIP-6)</text>
+                <text x="80" y="96" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">U2 — 7805 (TO-220)</text>
+                <text x="80" y="112" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">U1 — LM35 (TO-92)</text>
+                <rect x="8" y="122" width="144" height="16" rx="2" fill="rgba(200,121,65,0.06)"/>
+                <text x="80" y="133" text-anchor="middle" fill="rgba(200,121,65,0.85)" font-family="monospace" font-size="7">⚠ Orientación crítica · ver serigrafía</text>
+            </g>
+
+            <!-- flecha 3→4 -->
+            <line x1="551" y1="114" x2="565" y2="114" stroke="#2a1a0a" stroke-width="1.5" marker-end="url(#arrowR)"/>
+
+            <!-- PASO 04 -->
+            <g transform="translate(570,42)">
+                <rect width="160" height="145" rx="3" fill="#100808" stroke="#3a1a0a" stroke-width="1.5"/>
+                <rect width="160" height="2" rx="1" fill="#ff3d00"/>
+                <text x="80" y="22" text-anchor="middle" fill="#ff7050" font-family="monospace" font-size="8" letter-spacing="1">PASO 04</text>
+                <text x="80" y="38" text-anchor="middle" fill="#e8f5e8" font-family="monospace" font-size="9" font-weight="bold">POTENCIA AC</text>
+                <line x1="10" y1="48" x2="150" y2="48" stroke="#3a1a0a" stroke-width="0.5"/>
+                <text x="80" y="64" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">C1 — 2200 µF</text>
+                <text x="80" y="80" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">BR1 — Puente rectif.</text>
+                <text x="80" y="96" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">U4 — TRIAC JTC225S</text>
+                <text x="80" y="112" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">TR1 — Transformador</text>
+                <rect x="8" y="122" width="144" height="16" rx="2" fill="rgba(255,61,0,0.07)"/>
+                <text x="80" y="133" text-anchor="middle" fill="rgba(255,100,60,0.9)" font-family="monospace" font-size="7">⚠ PELIGRO 120V AC</text>
+            </g>
+
+            <!-- flecha 4→5 -->
+            <line x1="735" y1="114" x2="749" y2="114" stroke="#1a4d1a" stroke-width="1.5" marker-end="url(#arrowG)"/>
+
+            <!-- PASO 05 -->
+            <g transform="translate(754,42)">
+                <rect width="190" height="145" rx="3" fill="#0d180d" stroke="#1a4d1a" stroke-width="1"/>
+                <rect width="190" height="2" rx="1" fill="#00ff41"/>
+                <text x="95" y="22" text-anchor="middle" fill="#00ff41" font-family="monospace" font-size="8" letter-spacing="1">PASO 05</text>
+                <text x="95" y="38" text-anchor="middle" fill="#e8f5e8" font-family="monospace" font-size="9" font-weight="bold">MÓDULOS</text>
+                <line x1="10" y1="48" x2="180" y2="48" stroke="#1a4d1a" stroke-width="0.5"/>
+                <text x="95" y="64" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">ARD1 — Arduino UNO</text>
+                <text x="95" y="80" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">LCD1 — LM016L 16×2</text>
+                <text x="95" y="96" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="8">RPU — Potenciómetro</text>
+                <rect x="8" y="112" width="174" height="24" rx="2" fill="rgba(0,255,65,0.05)"/>
+                <text x="95" y="124" text-anchor="middle" fill="rgba(0,255,65,0.7)" font-family="monospace" font-size="7.5">Usar headers removibles</text>
+                <text x="95" y="135" text-anchor="middle" fill="rgba(0,255,65,0.7)" font-family="monospace" font-size="7.5">Ajustar contraste LCD</text>
+            </g>
+
+            <!-- etiqueta de flujo -->
+            <text x="480" y="208" text-anchor="middle" fill="#1a4d1a" font-family="monospace" font-size="9" letter-spacing="2">─── FLUJO DE MONTAJE: INICIO ──────────────────────────────────────────────── FIN ───</text>
+        </svg>
+    </div>
+
+    <!-- Tarjetas de pasos -->
+    <div class="steps-grid">
+        <div class="step-card safe reveal">
+            <div class="step-num">PASO 01 — RESISTENCIAS</div>
+            <div class="step-title">Componentes Resistivos</div>
+            <ul class="step-components">
+                <li>R1 — 500 Ω · Aislamiento AC</li>
+                <li>R2 — 2 kΩ · Base de Q1</li>
+                <li>R4 — 200 Ω · Salida Arduino</li>
+            </ul>
+            <div class="step-note">Doblar patillas a 90°. Insertar, soldar y cortar a ras del pad. No tienen polaridad.</div>
+        </div>
+        <div class="step-card safe reveal" style="transition-delay:0.08s">
+            <div class="step-num">PASO 02 — PASIVOS POLARES</div>
+            <div class="step-title">Diodo y Capacitor pequeño</div>
+            <ul class="step-components">
+                <li>D1 — 1N4007 · Protección</li>
+                <li>C3 — 4 µF · Desacople</li>
+            </ul>
+            <div class="step-note">Banda del diodo = cátodo. Franja del capacitor = polo negativo. Verificar dos veces antes de soldar.</div>
+        </div>
+        <div class="step-card caution reveal" style="transition-delay:0.16s">
+            <div class="step-num">PASO 03 — SEMICONDUCTORES</div>
+            <div class="step-title">Control y Sensado</div>
+            <ul class="step-components">
+                <li>Q1 — 2N2222 · Switch NPN</li>
+                <li>U3 — MOC3021 · Optoacoplador</li>
+                <li>U2 — 7805 · Regulador 5V</li>
+                <li>U1 — LM35 · Sensor temp.</li>
+            </ul>
+            <div class="step-note">Orientar cara plana según serigrafía. U3 es la barrera de seguridad DC/AC — orientación incorrecta destruye el Arduino.</div>
+        </div>
+        <div class="step-card danger reveal" style="transition-delay:0.24s">
+            <div class="step-num">PASO 04 — POTENCIA AC ⚠</div>
+            <div class="step-title">Etapa de Alta Tensión</div>
+            <ul class="step-components">
+                <li>C1 — 2200 µF · Filtro DC</li>
+                <li>BR1 — Puente rectificador</li>
+                <li>U4 — TRIAC JTC225S</li>
+                <li>TR1 — Transformador (último)</li>
+            </ul>
+            <div class="step-note">PELIGRO 120V. BR1 tiene marcados +, − y AC. Agregar disipador al TRIAC para cargas &gt;2A. TR1 va al final por su peso.</div>
+        </div>
+        <div class="step-card safe reveal" style="transition-delay:0.32s">
+            <div class="step-num">PASO 05 — MÓDULOS</div>
+            <div class="step-title">Arduino, LCD y Potenciómetro</div>
+            <ul class="step-components">
+                <li>ARD1 — Arduino UNO</li>
+                <li>LCD1 — LM016L 16×2</li>
+                <li>RPU — Potenciómetro ajuste</li>
+            </ul>
+            <div class="step-note">Soldar headers en la PCB; conectar módulos por encima. Permite reemplazo sin desoldar. Ajustar contraste LCD antes de fijar.</div>
+        </div>
+    </div>
+
+    <!-- ── DIAGRAMA 2: Mapa de zonas del PCB ── -->
+    <div class="reveal" style="margin-top:3rem">
+        <div class="diagram-label">// Diagrama 2 — Mapa de Zonas Funcionales del PCB (189.7 × 112.7 mm)</div>
+        <svg class="svg-diagram" viewBox="0 0 960 330" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <pattern id="g2" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M20 0L0 0 0 20" fill="none" stroke="rgba(0,255,65,0.035)" stroke-width="0.5"/>
+                </pattern>
+                <marker id="arr1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#00ff41"/>
+                </marker>
+                <marker id="arr2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L8,3 z" fill="#ff6040"/>
+                </marker>
+            </defs>
+            <rect width="960" height="330" fill="#0a1a0a"/>
+            <rect width="960" height="330" fill="url(#g2)"/>
+
+            <!-- PCB outline -->
+            <rect x="30" y="38" width="900" height="260" rx="6" fill="#0c160c" stroke="#1a4d1a" stroke-width="2"/>
+            <!-- corner holes -->
+            <circle cx="52"  cy="60"  r="5" fill="none" stroke="#1a4d1a" stroke-width="1.5"/>
+            <circle cx="908" cy="60"  r="5" fill="none" stroke="#1a4d1a" stroke-width="1.5"/>
+            <circle cx="52"  cy="276" r="5" fill="none" stroke="#1a4d1a" stroke-width="1.5"/>
+            <circle cx="908" cy="276" r="5" fill="none" stroke="#1a4d1a" stroke-width="1.5"/>
+
+            <!-- ZONA 1: ALIMENTACIÓN (izquierda, cobre) -->
+            <rect x="44" y="52" width="250" height="232" rx="4" fill="rgba(200,121,65,0.07)" stroke="rgba(200,121,65,0.45)" stroke-width="1.5" stroke-dasharray="6,3"/>
+            <text x="169" y="76" text-anchor="middle" fill="#c87941" font-family="monospace" font-size="9" letter-spacing="2" font-weight="bold">ALIMENTACIÓN</text>
+            <!-- Transformer box -->
+            <rect x="58" y="88" width="90" height="70" rx="3" fill="rgba(200,121,65,0.12)" stroke="rgba(200,121,65,0.5)" stroke-width="1"/>
+            <text x="103" y="119" text-anchor="middle" fill="#c87941" font-family="monospace" font-size="8" font-weight="bold">TR1</text>
+            <text x="103" y="133" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="7">Transformador</text>
+            <!-- Bridge -->
+            <rect x="164" y="88" width="56" height="42" rx="3" fill="rgba(200,121,65,0.1)" stroke="rgba(200,121,65,0.4)" stroke-width="1"/>
+            <text x="192" y="114" text-anchor="middle" fill="#c87941" font-family="monospace" font-size="7.5" font-weight="bold">BR1</text>
+            <!-- C1 -->
+            <rect x="164" y="140" width="56" height="36" rx="3" fill="rgba(200,121,65,0.08)" stroke="rgba(200,121,65,0.35)" stroke-width="1"/>
+            <text x="192" y="162" text-anchor="middle" fill="#c87941" font-family="monospace" font-size="7">C1 2200µF</text>
+            <!-- 7805 -->
+            <rect x="58" y="172" width="90" height="30" rx="3" fill="rgba(200,121,65,0.08)" stroke="rgba(200,121,65,0.35)" stroke-width="1"/>
+            <text x="103" y="191" text-anchor="middle" fill="#c87941" font-family="monospace" font-size="7.5" font-weight="bold">U2 — 7805</text>
+            <!-- SW1 -->
+            <rect x="60" y="218" width="50" height="24" rx="2" fill="rgba(200,121,65,0.06)" stroke="rgba(200,121,65,0.3)" stroke-width="1"/>
+            <text x="85" y="234" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="7">SW1</text>
+            <!-- label -->
+            <text x="169" y="264" text-anchor="middle" fill="rgba(200,121,65,0.55)" font-family="monospace" font-size="7.5">AC → 5V DC regulado</text>
+
+            <!-- Flecha zona 1 → zona 2 -->
+            <line x1="296" y1="168" x2="312" y2="168" stroke="#1a4d1a" stroke-width="2" marker-end="url(#arr1)"/>
+            <text x="304" y="162" text-anchor="middle" fill="#1a4d1a" font-family="monospace" font-size="6">5V</text>
+
+            <!-- ZONA 2: PROCESAMIENTO (centro, verde) -->
+            <rect x="316" y="52" width="340" height="232" rx="4" fill="rgba(0,255,65,0.04)" stroke="rgba(0,255,65,0.28)" stroke-width="1.5" stroke-dasharray="6,3"/>
+            <text x="486" y="76" text-anchor="middle" fill="#00ff41" font-family="monospace" font-size="9" letter-spacing="2" font-weight="bold">PROCESAMIENTO</text>
+            <!-- Arduino box -->
+            <rect x="436" y="90" width="200" height="110" rx="3" fill="rgba(0,100,200,0.12)" stroke="rgba(0,150,255,0.4)" stroke-width="1.5"/>
+            <text x="536" y="142" text-anchor="middle" fill="#60aaff" font-family="monospace" font-size="9" font-weight="bold">ARDUINO UNO</text>
+            <text x="536" y="158" text-anchor="middle" fill="#3a6a9a" font-family="monospace" font-size="7">ATmega328P</text>
+            <!-- LCD box -->
+            <rect x="328" y="90" width="100" height="52" rx="3" fill="rgba(0,255,65,0.06)" stroke="rgba(0,255,65,0.3)" stroke-width="1"/>
+            <text x="378" y="120" text-anchor="middle" fill="#00ff41" font-family="monospace" font-size="8" font-weight="bold">LCD 16×2</text>
+            <!-- LM35 -->
+            <rect x="328" y="152" width="60" height="30" rx="2" fill="rgba(0,255,65,0.06)" stroke="rgba(0,255,65,0.25)" stroke-width="1"/>
+            <text x="358" y="171" text-anchor="middle" fill="#00ff41" font-family="monospace" font-size="7.5" font-weight="bold">LM35</text>
+            <!-- RPU -->
+            <rect x="400" y="152" width="28" height="30" rx="2" fill="rgba(0,255,65,0.05)" stroke="rgba(0,255,65,0.2)" stroke-width="1"/>
+            <text x="414" y="171" text-anchor="middle" fill="#7aaa7a" font-family="monospace" font-size="6.5">RPU</text>
+            <!-- label -->
+            <text x="486" y="264" text-anchor="middle" fill="rgba(0,255,65,0.45)" font-family="monospace" font-size="7.5">Señal digital / analógica 5V</text>
+
+            <!-- Barrera galvánica -->
+            <line x1="658" y1="46" x2="658" y2="294" stroke="rgba(255,220,0,0.35)" stroke-width="1" stroke-dasharray="5,4"/>
+            <text x="625" y="38" fill="rgba(255,200,0,0.6)" font-family="monospace" font-size="6.5" text-anchor="middle">AISLAMIENTO</text>
+            <text x="691" y="38" fill="rgba(255,200,0,0.6)" font-family="monospace" font-size="6.5" text-anchor="middle">GALVÁNICO</text>
+            <text x="658" y="306" fill="rgba(255,200,0,0.5)" font-family="monospace" font-size="6" text-anchor="middle">MOC3021</text>
+
+            <!-- Flecha zona 2 → zona 3 (via MOC3021) -->
+            <line x1="658" y1="168" x2="672" y2="168" stroke="#2a1a0a" stroke-width="2" marker-end="url(#arr2)"/>
+
+            <!-- ZONA 3: CONTROL AC (derecha, rojo) -->
+            <rect x="676" y="52" width="248" height="232" rx="4" fill="rgba(255,61,0,0.05)" stroke="rgba(255,61,0,0.38)" stroke-width="1.5" stroke-dasharray="6,3"/>
+            <text x="800" y="76" text-anchor="middle" fill="#ff6040" font-family="monospace" font-size="9" letter-spacing="2" font-weight="bold">CONTROL AC</text>
+            <!-- Q1 -->
+            <rect x="690" y="90" width="70" height="36" rx="2" fill="rgba(255,61,0,0.07)" stroke="rgba(255,61,0,0.3)" stroke-width="1"/>
+            <text x="725" y="112" text-anchor="middle" fill="#ff8060" font-family="monospace" font-size="8" font-weight="bold">Q1 — 2N2222</text>
+            <!-- U3 optocoupler -->
+            <rect x="770" y="90" width="70" height="36" rx="2" fill="rgba(255,61,0,0.07)" stroke="rgba(255,61,0,0.3)" stroke-width="1"/>
+            <text x="805" y="112" text-anchor="middle" fill="#ff8060" font-family="monospace" font-size="8" font-weight="bold">MOC3021</text>
+            <!-- TRIAC -->
+            <rect x="690" y="138" width="150" height="50" rx="3" fill="rgba(255,61,0,0.09)" stroke="rgba(255,61,0,0.4)" stroke-width="1.5"/>
+            <text x="765" y="169" text-anchor="middle" fill="#ff6040" font-family="monospace" font-size="10" font-weight="bold">TRIAC U4</text>
+            <!-- Danger badge -->
+            <rect x="700" y="205" width="210" height="36" rx="3" fill="rgba(255,61,0,0.1)" stroke="rgba(255,61,0,0.4)" stroke-width="1"/>
+            <text x="805" y="219" text-anchor="middle" fill="#ff3d00" font-family="monospace" font-size="9" font-weight="bold">⚠ 120V AC</text>
+            <text x="805" y="234" text-anchor="middle" fill="rgba(255,61,0,0.7)" font-family="monospace" font-size="7.5">NO TOCAR CON EQUIPO ENERGIZADO</text>
+            <!-- label -->
+            <text x="800" y="264" text-anchor="middle" fill="rgba(255,61,0,0.5)" font-family="monospace" font-size="7.5">120V AC conmutada</text>
+
+            <!-- leyenda -->
+            <g transform="translate(34,306)">
+                <rect width="8" height="8" rx="1" fill="rgba(200,121,65,0.5)"/>
+                <text x="12" y="8" fill="#7aaa7a" font-family="monospace" font-size="7">Alimentación</text>
+                <rect x="100" width="8" height="8" rx="1" fill="rgba(0,255,65,0.4)"/>
+                <text x="112" y="8" fill="#7aaa7a" font-family="monospace" font-size="7">Procesamiento</text>
+                <rect x="215" width="8" height="8" rx="1" fill="rgba(255,61,0,0.5)"/>
+                <text x="227" y="8" fill="#7aaa7a" font-family="monospace" font-size="7">Control AC</text>
+                <rect x="305" width="8" height="8" rx="1" fill="rgba(255,220,0,0.3)" stroke="rgba(255,220,0,0.5)" stroke-width="0.5" stroke-dasharray="2,1"/>
+                <text x="317" y="8" fill="#7aaa7a" font-family="monospace" font-size="7">Aislamiento galvánico</text>
+            </g>
+        </svg>
+    </div>
+
+    <!-- ── Lista de verificación ── -->
+    <div class="reveal" style="margin-top:3rem">
+        <div class="diagram-label">// Lista de Verificación Pre-Energización</div>
+        <ul class="verify-list">
+            <li><span class="vi ok">✓</span>Inspección visual: sin puentes de estaño entre pads adyacentes en Arduino y LCD</li>
+            <li><span class="vi ok">✓</span>Continuidad: GND y VCC no están en cortocircuito (multímetro en modo beep)</li>
+            <li><span class="vi ok">✓</span>Polaridad de C1 (2200µF): franja negativa coincide con marca del footprint</li>
+            <li><span class="vi ok">✓</span>Polaridad de D1 (1N4007): banda del cátodo coincide con serigrafía</li>
+            <li><span class="vi ok">✓</span>Orientación de U3 (MOC3021): punto del pin 1 alineado con footprint DIP-6</li>
+            <li><span class="vi ok">✓</span>Orientación de U1 (LM35): cara plana según dibujo de serigrafía</li>
+            <li><span class="vi ok">✓</span>Verificación DRC KiCad: 0 cables de interconexión pendientes (ratsnest = 0)</li>
+            <li><span class="vi err">⚠</span>Primera energización: usar fusible de 1A en serie con la entrada AC como protección</li>
+            <li><span class="vi err">⚠</span>Prueba inicial: fuente DC 5V directa en salida del 7805 antes de conectar la red AC</li>
+            <li><span class="vi err">⚠</span>Aislamiento galvánico: verificar circuito abierto entre GND Arduino y terminal carga AC</li>
+        </ul>
+    </div>
+</div>
+
+<!-- TEAM -->
+<div class="section-wrap" id="team">
+    <div class="reveal">
+        <div class="section-label">// 06 — Autores</div>
+        <h2 class="section-title">Equipo de <span>Desarrollo</span></h2>
+        <div class="section-divider"></div>
+    </div>
+    <div class="team-grid">
+        <div class="team-card reveal">
+            <div class="avatar">OA</div>
+            <div>
+                <div class="team-name">Oscar Eduardo Arteaga David</div>
+                <div class="team-role">// Tecnología en Automatización Electrónica</div>
+                <div class="team-email">oscararteaga1115943@correo.itm.edu.co</div>
+            </div>
+        </div>
+        <div class="team-card reveal" style="transition-delay:0.15s">
+            <div class="avatar">SB</div>
+            <div>
+                <div class="team-name">Sebastian Bohorquez Taborda</div>
+                <div class="team-role">// Tecnología en Automatización Electrónica</div>
+                <div class="team-email">sebastianbohorquez1131358@correo.itm.edu.co</div>
+            </div>
+        </div>
+    </div>
+    <div class="teacher-box reveal" style="transition-delay:0.1s">
+        <div class="avatar" style="border-color:var(--copper);color:var(--copper);text-shadow:0 0 10px var(--copper)">JP</div>
+        <div>
+            <div class="teacher-label">DOCENTE</div>
+            <div class="teacher-name">Juan Pablo Villegas Ceballos</div>
+            <div class="teacher-sub">Diseño y Montaje de Circuitos y Sistemas Electrónicos · 2026-1 · ITM Medellín</div>
+        </div>
+    </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+    <div class="footer-text">
+        <span>Institución Universitaria ITM</span> — Medellín, Colombia<br>
+        Diseño y Montaje de Circuitos y Sistemas Electrónicos · Semestre 2026-1<br>
+        Controlador de Temperatura para Incubadora · Hardware libre bajo licencia CERN-OHL-S v2
+    </div>
+</footer>
+
+<script>
+    /* ── Trazas animadas en el hero ── */
+    const bg = document.getElementById('circuitBg');
+    for (let i = 0; i < 10; i++) {
+        const line = document.createElement('div');
+        line.className = 'trace-line';
+        const width = 150 + Math.random() * 400;
+        const top   = 5 + i * 9.5;
+        const delay = i * 0.7;
+        const dur   = 4 + Math.random() * 4;
+        line.style.cssText = `top:${top}%;width:${width}px;animation-delay:${delay}s;animation-duration:${dur}s;`;
+        bg.appendChild(line);
+    }
+
+    /* ── Scroll reveal ── */
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.08 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    /* ── Simulación de temperatura ── */
+    const tempEl = document.getElementById('tempVal');
+    let temp = 35.0, rising = true;
+    setInterval(() => {
+        temp = rising ? temp + 0.1 : temp - 0.1;
+        if (temp >= 38.8) rising = false;
+        if (temp <= 34.8) rising = true;
+        tempEl.textContent = temp.toFixed(1);
+    }, 180);
+
+    /* ── FIX IMÁGENES PCB ──
+       Cuando la imagen carga, se añade clase 'loaded' (display:block)
+       y se ocultan los placeholders .slot-ph.
+       El onerror en el HTML ya intenta .jpg → .png automáticamente.
+    ── */
+    document.querySelectorAll('.pcb-slot img').forEach(img => {
+        const showImg = function() {
+            this.classList.add('loaded');
+            this.parentElement.querySelectorAll('.slot-ph').forEach(el => {
+                el.style.display = 'none';
+            });
+        };
+        img.addEventListener('load', showImg);
+        // Si el navegador ya cargó la imagen antes de que correra este script
+        if (img.complete && img.naturalWidth > 0) {
+            showImg.call(img);
+        }
+    });
+</script>
+</body>
+</html>
